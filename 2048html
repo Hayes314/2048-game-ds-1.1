@@ -1,0 +1,1664 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#faf8ef">
+<title>2048</title>
+<style>
+:root{
+  --page-bg:#faf8ef; --board-bg:#bbada0; --cell-bg:rgba(238,228,218,.35);
+  --text-main:#776e65; --text-sub:#9a9088; --panel-bg:#fff;
+  --accent:#f2b179; --accent-text:#fff;
+  --shadow:0 6px 20px rgba(0,0,0,.10);
+  --shadow-lg:0 24px 60px rgba(0,0,0,.32);
+  --radius:14px;
+}
+*,*::before,*::after{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{
+  margin:0;padding:0;height:100%;height:100dvh;
+  overflow:hidden;overscroll-behavior:none;
+  position:fixed;inset:0;width:100%;
+  -webkit-text-size-adjust:100%;
+  touch-action:manipulation;
+}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","PingFang SC","Microsoft JhengHei","Microsoft YaHei",Roboto,"Helvetica Neue",Arial,sans-serif;
+  background:var(--page-bg); color:var(--text-main);
+  display:flex; align-items:center; justify-content:center;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  transition:background-color .35s ease,color .35s ease;
+  user-select:none; -webkit-user-select:none;
+}
+.wrap{
+  width:min(92vw,480px);
+  height:100%;max-height:100%;
+  display:flex;flex-direction:column;gap:7px;
+  padding:7px 0;box-sizing:border-box;
+}
+.head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0}
+.logo{margin:0;font-size:clamp(26px,7.5vw,38px);font-weight:800;letter-spacing:-1px;color:var(--text-main);line-height:1}
+.scores{display:flex;gap:7px}
+.score-box{
+  position:relative;min-width:72px;padding:5px 10px 6px;
+  background:var(--panel-bg);border-radius:10px;text-align:center;
+  box-shadow:var(--shadow);transition:background-color .35s;
+}
+.score-label{display:block;font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-sub);opacity:.9}
+.score-val{display:block;font-size:clamp(15px,4.4vw,20px);font-weight:800;color:var(--text-main);line-height:1.15;font-variant-numeric:tabular-nums}
+.score-box.bump .score-val{animation:bump .3s ease}
+@keyframes bump{0%{transform:scale(1)}45%{transform:scale(1.2)}100%{transform:scale(1)}}
+.modes{display:flex;gap:4px;background:var(--cell-bg);padding:4px;border-radius:11px;flex-shrink:0}
+.mode-btn{
+  flex:1;border:0;background:transparent;color:var(--text-main);
+  font:inherit;font-size:clamp(10.5px,3vw,12.5px);font-weight:700;
+  padding:7px 1px;border-radius:7px;cursor:pointer;
+  transition:background-color .22s,color .22s,transform .12s;
+  white-space:nowrap;min-height:34px;
+}
+.mode-btn:active{transform:scale(.96)}
+.mode-btn.active{background:var(--panel-bg);box-shadow:0 2px 8px rgba(0,0,0,.10)}
+.timer-row{display:none;align-items:center;gap:8px;height:16px;padding:0 2px;flex-shrink:0}
+.timer-row.on{display:flex}
+.timer-track{flex:1;height:6px;border-radius:99px;background:var(--cell-bg);overflow:hidden}
+.timer-fill{
+  height:100%;width:100%;border-radius:99px;
+  background:linear-gradient(90deg,#6ec26e,#a8d84a);
+  transform-origin:left center;transform:scaleX(1);
+  transition:background .3s;
+}
+.timer-fill.warn{background:linear-gradient(90deg,#f0a03c,#f6c244)}
+.timer-fill.danger{background:linear-gradient(90deg,#e8564a,#f5805a);animation:pulse .7s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+.timer-text{font-size:11px;font-weight:800;color:var(--text-sub);min-width:36px;text-align:right;font-variant-numeric:tabular-nums}
+.board-wrap{
+  flex:1;min-height:0;min-width:0;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+.board{
+  position:relative;
+  width:300px;height:300px;max-width:100%;max-height:100%;
+  aspect-ratio:1;
+  background:var(--board-bg);
+  border-radius:var(--radius);
+  box-shadow:0 10px 30px rgba(0,0,0,.13);
+  touch-action:none;
+  overflow:hidden;
+  transition:background-color .35s;
+  contain:layout style paint;
+}
+.grid-bg,.tile-layer{position:absolute;inset:0;pointer-events:none}
+.cell{
+  position:absolute;top:0;left:0;
+  background:var(--cell-bg);
+  border-radius:7px;
+  transition:background-color .35s;
+}
+.cell.blocker{
+  background:repeating-linear-gradient(45deg,rgba(0,0,0,.18) 0 5px,rgba(0,0,0,.28) 5px 10px);
+  box-shadow:inset 0 0 0 2px rgba(0,0,0,.12);
+}
+.tile{
+  position:absolute;top:0;left:0;
+  will-change:transform;
+  transition:transform 100ms cubic-bezier(.25,.1,.25,1);
+  z-index:2;
+}
+.tile-inner{
+  width:100%;height:100%;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.5px;
+  border-radius:7px;
+  transition:background-color .18s ease,color .18s ease;
+  will-change:transform;backface-visibility:hidden;
+}
+.anim-appear{animation:appear 150ms cubic-bezier(.2,.9,.3,1.4)}
+@keyframes appear{from{transform:scale(.15);opacity:0}to{transform:scale(1);opacity:1}}
+.anim-pop{animation:pop 190ms cubic-bezier(.2,.9,.3,1.4)}
+@keyframes pop{0%{transform:scale(1)}48%{transform:scale(1.22)}100%{transform:scale(1)}}
+.controls{display:flex;gap:5px;flex-shrink:0}
+.btn{
+  border:0;cursor:pointer;font:inherit;font-weight:700;font-size:clamp(10.5px,3vw,12.5px);
+  padding:10px 4px;border-radius:10px;background:var(--panel-bg);color:var(--text-main);
+  box-shadow:var(--shadow);
+  transition:transform .12s,background-color .22s,box-shadow .22s,opacity .2s;
+  white-space:nowrap;flex:1;min-height:40px;
+}
+.btn:active{transform:scale(.96)}
+.btn.primary{background:var(--accent);color:var(--accent-text)}
+.btn:disabled{opacity:.35;cursor:default;pointer-events:none;box-shadow:none}
+.settings{display:flex;gap:6px;flex-shrink:0}
+.sel{
+  flex:1;border:0;cursor:pointer;font:inherit;font-weight:700;font-size:clamp(11px,3vw,12.5px);
+  padding:10px 22px 10px 8px;border-radius:10px;background:var(--panel-bg);color:var(--text-main);
+  box-shadow:var(--shadow);appearance:none;-webkit-appearance:none;
+  text-align:center;text-align-last:center;
+  transition:background-color .22s,color .22s;
+  background-image:linear-gradient(45deg,transparent 50%,var(--text-sub) 50%),linear-gradient(135deg,var(--text-sub) 50%,transparent 50%);
+  background-position:calc(100% - 12px) center,calc(100% - 7px) center;
+  background-size:5px 5px,5px 5px;background-repeat:no-repeat;
+  min-height:40px;
+}
+.sel:focus{outline:2px solid var(--accent);outline-offset:1px}
+.hint{text-align:center;font-size:11px;color:var(--text-sub);opacity:.85;letter-spacing:.2px;flex-shrink:0}
+.overlay{
+  position:fixed;inset:0;z-index:100;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(30,26,22,.55);
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+  padding:20px;
+  opacity:0;pointer-events:none;
+  transition:opacity .26s ease;
+}
+.overlay.show{opacity:1;pointer-events:auto}
+.dialog{
+  width:min(92vw,400px);max-height:88dvh;overflow-y:auto;
+  background:var(--panel-bg);border-radius:18px;
+  padding:22px 20px 18px;
+  box-shadow:var(--shadow-lg);
+  transform:scale(.9) translateY(10px);
+  transition:transform .28s cubic-bezier(.2,.9,.3,1.35);
+  color:var(--text-main);
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+}
+.overlay.show .dialog{transform:scale(1) translateY(0)}
+.dialog h2{margin:0 0 8px;font-size:21px;font-weight:800;letter-spacing:-.3px}
+.dialog p{margin:0 0 10px;font-size:13px;color:var(--text-sub);line-height:1.6}
+.ov-score{
+  font-size:32px;font-weight:900;letter-spacing:-1px;
+  text-align:center;margin:4px 0 16px;color:var(--text-main);
+}
+.ov-score small{display:block;font-size:10.5px;font-weight:700;letter-spacing:1px;color:var(--text-sub);margin-bottom:2px}
+.dialog-btns{display:flex;gap:8px;margin-top:6px}
+.dialog-btns .btn{flex:1;box-shadow:none;background:var(--cell-bg);padding:11px 8px}
+.dialog-btns .btn.primary{background:var(--accent);color:var(--accent-text)}
+.field{margin-bottom:14px}
+.field>label{display:block;font-size:11.5px;font-weight:800;letter-spacing:.4px;color:var(--text-sub);margin-bottom:7px;text-transform:uppercase}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{
+  border:0;cursor:pointer;font:inherit;font-weight:700;font-size:12.5px;
+  padding:8px 12px;border-radius:9px;background:var(--cell-bg);color:var(--text-main);
+  transition:background-color .2s,color .2s,transform .1s;
+}
+.chip:active{transform:scale(.95)}
+.chip.active{background:var(--accent);color:var(--accent-text)}
+.save-code{
+  width:100%;
+  border:1px solid rgba(0,0,0,.12);
+  border-radius:8px;
+  padding:8px 10px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:11px;
+  line-height:1.5;
+  background:var(--page-bg);
+  color:var(--text-main);
+  resize:none;
+  margin-bottom:6px;
+  word-break:break-all;
+  white-space:pre-wrap;
+  box-sizing:border-box;
+}
+.save-code:focus{outline:2px solid var(--accent);outline-offset:0}
+.divider{height:1px;background:var(--cell-bg);margin:14px 0}
+@media (max-width:380px){
+  .score-box{min-width:62px;padding:4px 7px}
+  .btn{padding:9px 2px;font-size:10.5px}
+  .sel{font-size:11px;padding:9px 18px 9px 4px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="head">
+    <h1 class="logo">2048</h1>
+    <div class="scores">
+      <div class="score-box" id="scoreBox">
+        <span class="score-label" data-i18n="score">分數</span>
+        <span class="score-val" id="scoreVal">0</span>
+      </div>
+      <div class="score-box">
+        <span class="score-label" data-i18n="best">最高分</span>
+        <span class="score-val" id="bestVal">0</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="modes" id="modeBar">
+    <button class="mode-btn" data-mode="classic" data-i18n="mClassic">經典</button>
+    <button class="mode-btn" data-mode="timed"   data-i18n="mTimed">限時</button>
+    <button class="mode-btn" data-mode="blocker" data-i18n="mBlocker">障礙</button>
+    <button class="mode-btn" data-mode="custom"  data-i18n="mCustom">自訂</button>
+  </div>
+
+  <div class="timer-row" id="timerRow">
+    <div class="timer-track"><div class="timer-fill" id="timerFill"></div></div>
+    <div class="timer-text" id="timerText">--</div>
+  </div>
+
+  <div class="board-wrap" id="boardWrap">
+    <div class="board" id="board">
+      <div class="grid-bg" id="gridBg"></div>
+      <div class="tile-layer" id="tileLayer"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn" id="undoBtn" data-i18n="undo" disabled>復原</button>
+    <button class="btn" id="saveBtn" data-i18n="save">存檔</button>
+    <button class="btn" id="newBtn" data-i18n="newGame">新遊戲</button>
+    <button class="btn primary" id="restartBtn" data-i18n="restart">重新開始</button>
+  </div>
+
+  <div class="settings">
+    <select class="sel" id="themeSel" aria-label="theme"></select>
+    <select class="sel" id="langSel" aria-label="language"></select>
+  </div>
+
+  <div class="hint" data-i18n="hint">方向鍵 / WASD / 滑動來移動方塊</div>
+</div>
+
+<div class="overlay" id="overlay"></div>
+
+<script>
+(function(){
+'use strict';
+
+/* ==================== i18n ==================== */
+var I18N = {
+  'zh-Hant': {
+    score:'分數', best:'最高分', newGame:'新遊戲', restart:'重新開始', undo:'復原', save:'存檔',
+    mClassic:'經典', mTimed:'限時', mBlocker:'障礙', mCustom:'自訂',
+    hint:'方向鍵 / WASD / 滑動來移動方塊',
+    gameOver:'遊戲結束', timeUp:'時間到！', win:'達成目標！',
+    winDesc:'你合成了 {n}！要繼續挑戰嗎？',
+    overDesc:'沒有可以移動的方塊了',
+    finalScore:'最終分數',
+    keepGoing:'繼續玩', cancel:'取消', close:'關閉',
+    customTitle:'自訂玩法', boardSize:'棋盤大小', target:'目標數字',
+    blockers:'障礙方塊', timeLimit:'時間限制', none:'無', start:'開始遊戲',
+    themeClassic:'經典', themeNeon:'霓虹', themeForest:'森林', themeOcean:'海洋', themeCandy:'糖果',
+    langName:'繁體中文',
+    saveTitle:'存檔代碼', saveDesc:'複製以下代碼保存你的進度：',
+    copy:'複製', copied:'已複製！',
+    loadDesc:'或貼上存檔代碼來讀取進度：', loadBtn:'讀取',
+    loadError:'代碼無效'
+  },
+  'zh-Hans': {
+    score:'分数', best:'最高分', newGame:'新游戏', restart:'重新开始', undo:'撤销', save:'存档',
+    mClassic:'经典', mTimed:'限时', mBlocker:'障碍', mCustom:'自定义',
+    hint:'方向键 / WASD / 滑动来移动方块',
+    gameOver:'游戏结束', timeUp:'时间到！', win:'达成目标！',
+    winDesc:'你合成了 {n}！要继续挑战吗？',
+    overDesc:'没有可以移动的方块了',
+    finalScore:'最终分数',
+    keepGoing:'继续玩', cancel:'取消', close:'关闭',
+    customTitle:'自定义玩法', boardSize:'棋盘大小', target:'目标数字',
+    blockers:'障碍方块', timeLimit:'时间限制', none:'无', start:'开始游戏',
+    themeClassic:'经典', themeNeon:'霓虹', themeForest:'森林', themeOcean:'海洋', themeCandy:'糖果',
+    langName:'简体中文',
+    saveTitle:'存档代码', saveDesc:'复制以下代码保存你的进度：',
+    copy:'复制', copied:'已复制！',
+    loadDesc:'或粘贴存档代码来读取进度：', loadBtn:'读取',
+    loadError:'代码无效'
+  },
+  'en': {
+    score:'SCORE', best:'BEST', newGame:'New Game', restart:'Restart', undo:'Undo', save:'Save',
+    mClassic:'Classic', mTimed:'Timed', mBlocker:'Blockers', mCustom:'Custom',
+    hint:'Arrow keys / WASD / swipe to move tiles',
+    gameOver:'Game Over', timeUp:"Time's Up!", win:'Goal Reached!',
+    winDesc:'You made {n}! Keep going?',
+    overDesc:'No more moves available',
+    finalScore:'Final Score',
+    keepGoing:'Keep Going', cancel:'Cancel', close:'Close',
+    customTitle:'Custom Mode', boardSize:'Board Size', target:'Target Tile',
+    blockers:'Blockers', timeLimit:'Time Limit', none:'None', start:'Start Game',
+    themeClassic:'Classic', themeNeon:'Neon', themeForest:'Forest', themeOcean:'Ocean', themeCandy:'Candy',
+    langName:'English',
+    saveTitle:'Save Code', saveDesc:'Copy the code below to save your progress:',
+    copy:'Copy', copied:'Copied!',
+    loadDesc:'Or paste a save code to load progress:', loadBtn:'Load',
+    loadError:'Invalid code'
+  }
+};
+
+var LANGS = ['zh-Hant','zh-Hans','en'];
+var currentLang = 'zh-Hant';
+try { currentLang = localStorage.getItem('g2048_lang') || ''; } catch(e){}
+if (LANGS.indexOf(currentLang) < 0){
+  var nav = (navigator.language || '').toLowerCase();
+  currentLang = (nav.indexOf('zh-tw') === 0 || nav.indexOf('zh-hk') === 0 || nav.indexOf('hant') >= 0) ? 'zh-Hant'
+              : nav.indexOf('zh') === 0 ? 'zh-Hans' : 'en';
+}
+function t(key, vars){
+  var s = (I18N[currentLang] && I18N[currentLang][key]) || key;
+  if (vars) for (var k in vars) s = s.split('{'+k+'}').join(vars[k]);
+  return s;
+}
+
+/* ==================== Themes ==================== */
+var THEMES = {
+  classic: {
+    vars:{'--page-bg':'#faf8ef','--board-bg':'#bbada0','--cell-bg':'rgba(238,228,218,.35)',
+          '--text-main':'#776e65','--text-sub':'#9a9088','--panel-bg':'#ffffff',
+          '--accent':'#f2b179','--accent-text':'#ffffff',
+          '--shadow':'0 6px 20px rgba(0,0,0,.10)','--shadow-lg':'0 24px 60px rgba(0,0,0,.32)'},
+    palette:['#eee4da','#ede0c8','#f2b179','#f59563','#f67c5f','#f65e3b',
+             '#edcf72','#edcc61','#edc850','#edc53f','#edc22e','#3c3a32','#2b2a25','#1f1e1a']
+  },
+  neon: {
+    vars:{'--page-bg':'#0d1224','--board-bg':'#182140','--cell-bg':'rgba(255,255,255,.06)',
+          '--text-main':'#e8eeff','--text-sub':'#8c9bc4','--panel-bg':'#1c2547',
+          '--accent':'#3fd6c0','--accent-text':'#062018',
+          '--shadow':'0 6px 20px rgba(0,0,0,.5)','--shadow-lg':'0 24px 60px rgba(0,0,0,.7)'},
+    palette:['#233056','#2c3f70','#36518f','#3f66b0','#3f86d6','#3fa8d6',
+             '#3fd6c0','#3fd68a','#6ad63f','#d6d63f','#d6a03f','#d6683f','#d63f7a','#a03fd6']
+  },
+  forest: {
+    vars:{'--page-bg':'#eef5e6','--board-bg':'#7d9a63','--cell-bg':'rgba(255,255,255,.28)',
+          '--text-main':'#3d5230','--text-sub':'#7d8f6e','--panel-bg':'#ffffff',
+          '--accent':'#6caa48','--accent-text':'#ffffff',
+          '--shadow':'0 6px 20px rgba(0,0,0,.10)','--shadow-lg':'0 24px 60px rgba(0,0,0,.32)'},
+    palette:['#d8e8c8','#c0dca8','#a4cc84','#88bc64','#6caa48','#529a34',
+             '#3d8828','#2f701f','#245a18','#1a4412','#12300c','#0d2209','#081806','#050f04']
+  },
+  ocean: {
+    vars:{'--page-bg':'#eaf3fa','--board-bg':'#7aa5c4','--cell-bg':'rgba(255,255,255,.30)',
+          '--text-main':'#244a63','--text-sub':'#7493a8','--panel-bg':'#ffffff',
+          '--accent':'#3a8cbe','--accent-text':'#ffffff',
+          '--shadow':'0 6px 20px rgba(0,0,0,.10)','--shadow-lg':'0 24px 60px rgba(0,0,0,.32)'},
+    palette:['#cfe4f0','#b4d6ea','#94c6e2','#74b4d8','#54a0cc','#3a8cbe',
+             '#2a78ac','#1e6498','#165084','#0f3e6e','#0a2e58','#072244','#041832','#020f20']
+  },
+  candy: {
+    vars:{'--page-bg':'#fdeef4','--board-bg':'#d989ab','--cell-bg':'rgba(255,255,255,.36)',
+          '--text-main':'#7a2f52','--text-sub':'#b07d97','--panel-bg':'#ffffff',
+          '--accent':'#ff68a5','--accent-text':'#ffffff',
+          '--shadow':'0 6px 20px rgba(0,0,0,.10)','--shadow-lg':'0 24px 60px rgba(0,0,0,.32)'},
+    palette:['#ffe0ec','#ffc8de','#ffa8cb','#ff88b8','#ff68a5','#ff4892',
+             '#f0287f','#d8186c','#b80e5a','#980848','#780438','#58022a','#3a011c','#200010']
+  }
+};
+var THEME_KEYS = ['classic','neon','forest','ocean','candy'];
+var THEME_LABEL = { classic:'themeClassic', neon:'themeNeon', forest:'themeForest', ocean:'themeOcean', candy:'themeCandy' };
+var currentTheme = 'classic';
+try { currentTheme = localStorage.getItem('g2048_theme') || 'classic'; } catch(e){}
+if (!THEMES[currentTheme]) currentTheme = 'classic';
+
+var _colorCache = {};
+function textColorFor(hex){
+  if (_colorCache[hex]) return _colorCache[hex];
+  var n = parseInt(hex.slice(1), 16);
+  var r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  var lum = (0.299*r + 0.587*g + 0.114*b) / 255;
+  var c = lum > 0.62 ? '#3a3330' : '#f9f6f2';
+  _colorCache[hex] = c;
+  return c;
+}
+
+/* ==================== DOM ==================== */
+var boardEl     = document.getElementById('board');
+var boardWrap   = document.getElementById('boardWrap');
+var gridBgEl    = document.getElementById('gridBg');
+var tileLayerEl = document.getElementById('tileLayer');
+var scoreValEl  = document.getElementById('scoreVal');
+var bestValEl   = document.getElementById('bestVal');
+var scoreBoxEl  = document.getElementById('scoreBox');
+var overlayEl   = document.getElementById('overlay');
+var modeBarEl   = document.getElementById('modeBar');
+var timerRowEl  = document.getElementById('timerRow');
+var timerFillEl = document.getElementById('timerFill');
+var timerTextEl = document.getElementById('timerText');
+var newBtnEl    = document.getElementById('newBtn');
+var restartBtnEl= document.getElementById('restartBtn');
+var undoBtnEl   = document.getElementById('undoBtn');
+var saveBtnEl   = document.getElementById('saveBtn');
+var themeSelEl  = document.getElementById('themeSel');
+var langSelEl   = document.getElementById('langSel');
+
+/* ==================== State ==================== */
+var G = {
+  size: 4,
+  grid: [],
+  blockers: [],
+  score: 0,
+  best: 0,
+  mode: 'classic',
+  target: 2048,
+  timeLimit: 0,
+  timeLeft: 0,
+  running: false,
+  won: false,
+  over: false,
+  locked: false,
+  nextId: 1,
+  cell: 60, gap: 8, pad: 8,
+  lastConfig: { size:4, target:2048, timeLimit:0, blockers:0, mode:'classic' }
+};
+try { G.best = parseInt(localStorage.getItem('g2048_best') || '0', 10) || 0; } catch(e){ G.best = 0; }
+
+var MOVE_DURATION = 100;
+var moveQueue = [];
+var timerInterval = null;
+var timerEndAt = 0;
+var history = [];
+var MAX_HISTORY = 20;
+var actionId = 0;
+
+/* ==================== Tile ==================== */
+function newTile(value, row, col){
+  return { id: G.nextId++, value: value, row: row, col: col, el: null };
+}
+function sizeTile(tl){
+  if (!tl.el) return;
+  var s = G.cell;
+  tl.el.style.width  = s + 'px';
+  tl.el.style.height = s + 'px';
+  var inner = tl.el.firstChild;
+  if (inner) inner.style.borderRadius = Math.max(4, s * 0.14) + 'px';
+}
+function positionTile(tl){
+  if (!tl.el) return;
+  var x = G.pad + tl.col * (G.cell + G.gap);
+  var y = G.pad + tl.row * (G.cell + G.gap);
+  tl.el.style.transform = 'translate3d(' + x + 'px,' + y + 'px,0)';
+}
+function updateTileFace(tl){
+  if (!tl.el) return;
+  var inner = tl.el.firstChild;
+  if (!inner) return;
+  var pal = THEMES[currentTheme].palette;
+  var idx = Math.round(Math.log(tl.value) / Math.LN2) - 1;
+  if (idx < 0) idx = 0;
+  if (idx >= pal.length) idx = pal.length - 1;
+  var bg = pal[idx];
+  inner.style.background = bg;
+  inner.style.color = textColorFor(bg);
+
+  var str = String(tl.value);
+  var digits = str.length;
+  var ratio = 0.44;
+  if (digits === 3) ratio = 0.36;
+  else if (digits === 4) ratio = 0.29;
+  else if (digits === 5) ratio = 0.235;
+  else if (digits >= 6) ratio = 0.19;
+
+  inner.style.fontSize = Math.max(8, G.cell * ratio) + 'px';
+  if (inner.textContent !== str) inner.textContent = str;
+}
+function ensureTileEl(tl, animClass){
+  if (tl.el && tl.el.parentNode === tileLayerEl){
+    positionTile(tl);
+    updateTileFace(tl);
+    return tl.el;
+  }
+  var el = document.createElement('div');
+  el.className = 'tile';
+  el.style.transition = 'none';
+  var inner = document.createElement('div');
+  inner.className = 'tile-inner';
+  el.appendChild(inner);
+  tl.el = el;
+
+  sizeTile(tl);
+  positionTile(tl);
+  updateTileFace(tl);
+  tileLayerEl.appendChild(el);
+
+  requestAnimationFrame(function(){
+    if (el.parentNode) el.style.transition = '';
+  });
+
+  if (animClass){
+    inner.classList.add(animClass);
+    inner.addEventListener('animationend', function(){
+      inner.classList.remove(animClass);
+    }, { once: true });
+  }
+  return el;
+}
+
+/* ==================== Helpers ==================== */
+function isBlocker(r, c){
+  return !!(G.blockers[r] && G.blockers[r][c]);
+}
+function emptyCells(){
+  var out = [];
+  for (var r = 0; r < G.size; r++){
+    for (var c = 0; c < G.size; c++){
+      if (!G.grid[r][c] && !isBlocker(r, c)) out.push({ r: r, c: c });
+    }
+  }
+  return out;
+}
+function addRandomTile(withAnim){
+  var cells = emptyCells();
+  if (!cells.length) return null;
+  var pos = cells[(Math.random() * cells.length) | 0];
+  var tl = newTile(Math.random() < 0.9 ? 2 : 4, pos.r, pos.c);
+  G.grid[pos.r][pos.c] = tl;
+  ensureTileEl(tl, withAnim ? 'anim-appear' : null);
+  return tl;
+}
+
+/* ==================== Layout ==================== */
+function buildGridBg(){
+  gridBgEl.innerHTML = '';
+  var frag = document.createDocumentFragment();
+  for (var r = 0; r < G.size; r++){
+    for (var c = 0; c < G.size; c++){
+      var d = document.createElement('div');
+      d.className = 'cell' + (isBlocker(r, c) ? ' blocker' : '');
+      frag.appendChild(d);
+    }
+  }
+  gridBgEl.appendChild(frag);
+}
+
+function layout(side){
+  if (!G.size) return;
+  var W = side || boardEl.getBoundingClientRect().width || 300;
+  var size = G.size;
+
+  var gap = Math.max(3, Math.round(W * 0.021));
+  var pad = gap;
+  var cell = (W - 2 * pad - (size - 1) * gap) / size;
+
+  G.gap = gap;
+  G.pad = pad;
+  G.cell = cell;
+
+  var cells = gridBgEl.children;
+  var i = 0;
+  for (var r = 0; r < size; r++){
+    for (var c = 0; c < size; c++){
+      var el = cells[i++];
+      if (!el) continue;
+      el.style.width  = cell + 'px';
+      el.style.height = cell + 'px';
+      el.style.transform = 'translate3d(' +
+        (pad + c * (cell + gap)) + 'px,' +
+        (pad + r * (cell + gap)) + 'px,0)';
+    }
+  }
+
+  for (var r2 = 0; r2 < size; r2++){
+    for (var c2 = 0; c2 < size; c2++){
+      var tl = G.grid[r2] && G.grid[r2][c2];
+      if (tl){
+        sizeTile(tl);
+        positionTile(tl);
+        updateTileFace(tl);
+      }
+    }
+  }
+}
+
+var lastSide = 0;
+function resize(){
+  var rect = boardWrap.getBoundingClientRect();
+  var side = Math.min(rect.width, rect.height);
+  if (side < 80) side = Math.min(window.innerWidth * 0.92, 480);
+  side = Math.max(180, side);
+  if (Math.abs(side - lastSide) < 0.5) return;
+  lastSide = side;
+  boardEl.style.width  = side + 'px';
+  boardEl.style.height = side + 'px';
+  layout(side);
+}
+
+var resizeRaf = null;
+function scheduleResize(){
+  if (resizeRaf) return;
+  resizeRaf = requestAnimationFrame(function(){
+    resizeRaf = null;
+    resize();
+  });
+}
+
+/* ==================== History / Undo ==================== */
+function updateUndoBtn(){
+  var enabled = history.length > 0 && G.running && !G.locked && !overlayEl.classList.contains('show');
+  if (G.over) enabled = history.length > 0 && !G.locked;
+  undoBtnEl.disabled = !enabled;
+}
+
+function pushHistory(){
+  var snap = {
+    grid: [],
+    score: G.score,
+    timeLeft: G.timeLeft,
+    won: G.won
+  };
+  for (var r = 0; r < G.size; r++){
+    var row = [];
+    for (var c = 0; c < G.size; c++){
+      var tl = G.grid[r][c];
+      row.push(tl ? tl.value : 0);
+    }
+    snap.grid.push(row);
+  }
+  history.push(snap);
+  if (history.length > MAX_HISTORY) history.shift();
+  updateUndoBtn();
+}
+
+function restoreState(snap){
+  stopTimer();
+  G.locked = false;
+  moveQueue.length = 0;
+  actionId++;
+  G.over = false;
+  G.won = snap.won;
+  G.score = snap.score;
+  G.running = true;
+
+  G.grid = [];
+  tileLayerEl.innerHTML = '';
+
+  for (var r = 0; r < G.size; r++){
+    var row = [];
+    for (var c = 0; c < G.size; c++){
+      var v = snap.grid[r][c];
+      if (v){
+        var tl = newTile(v, r, c);
+        row.push(tl);
+      } else {
+        row.push(null);
+      }
+    }
+    G.grid.push(row);
+  }
+
+  var side = lastSide || boardEl.getBoundingClientRect().width || 300;
+  layout(side);
+
+  for (var r2 = 0; r2 < G.size; r2++){
+    for (var c2 = 0; c2 < G.size; c2++){
+      if (G.grid[r2][c2]) ensureTileEl(G.grid[r2][c2], 'anim-appear');
+    }
+  }
+
+  updateScore();
+  updateUndoBtn();
+
+  if (G.timeLimit > 0){
+    var restoreTime = snap.timeLeft;
+    if (restoreTime <= 0.5) restoreTime = Math.max(20, G.timeLimit * 0.5);
+    G.timeLeft = restoreTime;
+    timerEndAt = Date.now() + restoreTime * 1000;
+    timerRowEl.classList.add('on');
+    updateTimerUI();
+    timerInterval = setInterval(timerTick, 100);
+  } else {
+    timerRowEl.classList.remove('on');
+  }
+}
+
+function undo(){
+  if (!history.length) return;
+  if (G.locked) return;
+  if (overlayEl.classList.contains('show')) return;
+  var snap = history.pop();
+  restoreState(snap);
+}
+
+/* ==================== canMove ==================== */
+function canMove(){
+  for (var r = 0; r < G.size; r++){
+    for (var c = 0; c < G.size; c++){
+      if (isBlocker(r, c)) continue;
+      var tl = G.grid[r][c];
+      if (!tl) continue;
+
+      if (c + 1 < G.size && !isBlocker(r, c + 1)){
+        var nr = G.grid[r][c + 1];
+        if (!nr) return true;
+        if (nr.value === tl.value) return true;
+      }
+      if (r + 1 < G.size && !isBlocker(r + 1, c)){
+        var nd = G.grid[r + 1][c];
+        if (!nd) return true;
+        if (nd.value === tl.value) return true;
+      }
+      if (c - 1 >= 0 && !isBlocker(r, c - 1)){
+        var nl = G.grid[r][c - 1];
+        if (!nl) return true;
+        if (nl.value === tl.value) return true;
+      }
+      if (r - 1 >= 0 && !isBlocker(r - 1, c)){
+        var nu = G.grid[r - 1][c];
+        if (!nu) return true;
+        if (nu.value === tl.value) return true;
+      }
+    }
+  }
+  return false;
+}
+
+/* ==================== Move ==================== */
+function computeMove(dir){
+  var size = G.size;
+  var newGrid = [];
+  for (var r = 0; r < size; r++) newGrid.push(G.grid[r].slice());
+
+  var moves = [];
+  var merges = [];
+  var newTiles = [];
+  var moved = false;
+  var gained = 0;
+
+  function processSegment(seg){
+    var tiles = [];
+    for (var i = 0; i < seg.length; i++){
+      var tl = G.grid[seg[i][0]][seg[i][1]];
+      if (tl) tiles.push(tl);
+    }
+    if (tiles.length === 0) return;
+
+    for (var i2 = 0; i2 < seg.length; i2++){
+      newGrid[seg[i2][0]][seg[i2][1]] = null;
+    }
+
+    var outIdx = 0;
+    var ti = 0;
+    while (ti < tiles.length){
+      var t1 = tiles[ti];
+      var nr = seg[outIdx][0], nc = seg[outIdx][1];
+
+      if (ti + 1 < tiles.length && tiles[ti+1].value === t1.value){
+        var t2 = tiles[ti+1];
+        var nv = t1.value * 2;
+        var nt = { id: G.nextId++, value: nv, row: nr, col: nc, el: null };
+        newGrid[nr][nc] = nt;
+        newTiles.push(nt);
+        merges.push({ a: t1, b: t2, row: nr, col: nc });
+        gained += nv;
+        moved = true;
+        ti += 2;
+      } else {
+        if (t1.row !== nr || t1.col !== nc){
+          moved = true;
+          moves.push({ tile: t1, row: nr, col: nc });
+        }
+        newGrid[nr][nc] = t1;
+        ti += 1;
+      }
+      outIdx++;
+    }
+  }
+
+  for (var i = 0; i < size; i++){
+    var line = [];
+    for (var j = 0; j < size; j++){
+      var rr, cc;
+      if (dir === 'left'){ rr = i; cc = j; }
+      else if (dir === 'right'){ rr = i; cc = size - 1 - j; }
+      else if (dir === 'up'){ rr = j; cc = i; }
+      else { rr = size - 1 - j; cc = i; }
+      line.push([rr, cc]);
+    }
+
+    var segStart = 0;
+    for (var k = 0; k <= line.length; k++){
+      var atEnd = (k === line.length);
+      var blocked = !atEnd && isBlocker(line[k][0], line[k][1]);
+      if (atEnd || blocked){
+        if (k > segStart) processSegment(line.slice(segStart, k));
+        segStart = k + 1;
+      }
+    }
+  }
+
+  return { moved: moved, gained: gained, newGrid: newGrid, moves: moves, merges: merges, newTiles: newTiles };
+}
+
+function doMove(dir){
+  if (!G.running || G.over) return;
+  if (overlayEl.classList.contains('show')) return;
+
+  if (G.locked){
+    if (moveQueue.length < 2) moveQueue.push(dir);
+    return;
+  }
+
+  var res = computeMove(dir);
+  if (!res.moved){
+    if (moveQueue.length){
+      var d0 = moveQueue.shift();
+      doMove(d0);
+      return;
+    }
+    checkGameState();
+    return;
+  }
+
+  pushHistory();
+
+  G.locked = true;
+  G.score += res.gained;
+  G.grid = res.newGrid;
+  updateScore();
+  updateUndoBtn();
+  if (res.gained > 0) bumpScore();
+
+  for (var i = 0; i < res.moves.length; i++){
+    var m = res.moves[i];
+    m.tile.row = m.row;
+    m.tile.col = m.col;
+    positionTile(m.tile);
+  }
+  for (var j = 0; j < res.merges.length; j++){
+    var mg = res.merges[j];
+    mg.a.row = mg.row; mg.a.col = mg.col;
+    mg.b.row = mg.row; mg.b.col = mg.col;
+    positionTile(mg.a);
+    positionTile(mg.b);
+  }
+
+  var myActionId = ++actionId;
+  setTimeout(function(){
+    if (myActionId !== actionId) return;
+    for (var k = 0; k < res.merges.length; k++){
+      var m2 = res.merges[k];
+      if (m2.a.el){ m2.a.el.remove(); m2.a.el = null; }
+      if (m2.b.el){ m2.b.el.remove(); m2.b.el = null; }
+    }
+    for (var n = 0; n < res.newTiles.length; n++){
+      ensureTileEl(res.newTiles[n], 'anim-pop');
+    }
+    addRandomTile(true);
+
+    G.locked = false;
+    updateUndoBtn();
+
+    if (moveQueue.length){
+      var d = moveQueue.shift();
+      doMove(d);
+      return;
+    }
+    checkGameState();
+  }, MOVE_DURATION);
+}
+
+/* ==================== State checks ==================== */
+function checkGameState(){
+  if (!G.running || G.over) return;
+
+  if (!G.won && G.target > 0){
+    var hasTarget = false;
+    for (var r = 0; r < G.size && !hasTarget; r++){
+      for (var c = 0; c < G.size; c++){
+        var tl = G.grid[r][c];
+        if (tl && tl.value >= G.target){ hasTarget = true; break; }
+      }
+    }
+    if (hasTarget){
+      G.won = true;
+      showWin();
+      return;
+    }
+  }
+
+  if (!canMove()){
+    showGameOver('over');
+  }
+}
+
+/* ==================== Score ==================== */
+function updateScore(){
+  if (scoreValEl.textContent !== String(G.score)) scoreValEl.textContent = G.score;
+  if (G.score > G.best){
+    G.best = G.score;
+    try { localStorage.setItem('g2048_best', String(G.best)); } catch(e){}
+  }
+  if (bestValEl.textContent !== String(G.best)) bestValEl.textContent = G.best;
+}
+function bumpScore(){
+  scoreBoxEl.classList.remove('bump');
+  void scoreBoxEl.offsetWidth;
+  scoreBoxEl.classList.add('bump');
+}
+
+/* ==================== Timer ==================== */
+function stopTimer(){
+  if (timerInterval){ clearInterval(timerInterval); timerInterval = null; }
+}
+function startTimer(seconds){
+  stopTimer();
+  G.timeLimit = seconds;
+  G.timeLeft = seconds;
+  timerEndAt = Date.now() + seconds * 1000;
+  timerRowEl.classList.add('on');
+  updateTimerUI();
+  timerInterval = setInterval(timerTick, 100);
+}
+function timerTick(){
+  var now = Date.now();
+  G.timeLeft = Math.max(0, (timerEndAt - now) / 1000);
+  updateTimerUI();
+  if (G.timeLeft <= 0){
+    stopTimer();
+    showGameOver('timeup');
+  }
+}
+function updateTimerUI(){
+  if (!G.timeLimit){
+    timerRowEl.classList.remove('on');
+    return;
+  }
+  timerRowEl.classList.add('on');
+  var frac = G.timeLimit > 0 ? G.timeLeft / G.timeLimit : 0;
+  if (frac < 0) frac = 0;
+  timerFillEl.style.transform = 'scaleX(' + frac + ')';
+  var cls = 'timer-fill';
+  if (frac < 0.2) cls += ' danger';
+  else if (frac < 0.5) cls += ' warn';
+  timerFillEl.className = cls;
+  timerTextEl.textContent = Math.ceil(G.timeLeft) + 's';
+}
+
+/* ==================== New game ==================== */
+function newGame(cfg){
+  stopTimer();
+  G.locked = false;
+  moveQueue.length = 0;
+  history = [];
+  actionId++;
+  G.over = false;
+  G.won = false;
+  G.running = true;
+  G.score = 0;
+  G.nextId = 1;
+
+  var size = cfg.size || 4;
+  G.size = size;
+  G.mode = cfg.mode || 'classic';
+  G.target = cfg.target || 2048;
+  G.timeLimit = cfg.timeLimit || 0;
+  G.timeLeft = G.timeLimit;
+  G.lastConfig = { size: size, target: G.target, timeLimit: G.timeLimit, blockers: cfg.blockers || 0, mode: G.mode };
+
+  G.grid = [];
+  for (var r = 0; r < size; r++){
+    var row = [];
+    for (var c = 0; c < size; c++) row.push(null);
+    G.grid.push(row);
+  }
+
+  G.blockers = [];
+  for (var r2 = 0; r2 < size; r2++){
+    var brow = [];
+    for (var c2 = 0; c2 < size; c2++) brow.push(false);
+    G.blockers.push(brow);
+  }
+
+  var cr, cc;
+  if (size % 2 === 1){
+    cr = (size - 1) / 2; cc = (size - 1) / 2;
+  } else {
+    cr = size / 2 - 1; cc = size / 2 - 1;
+  }
+  function isCenter(rr, cc2){
+    if (size % 2 === 1) return rr === cr && cc2 === cc;
+    return rr >= cr && rr <= cr + 1 && cc2 >= cc && cc2 <= cc + 1;
+  }
+
+  var maxBlockers = Math.max(0, Math.min(cfg.blockers || 0, size * size - 5));
+  var placed = 0, tries = 0;
+  while (placed < maxBlockers && tries < 400){
+    tries++;
+    var br = (Math.random() * size) | 0;
+    var bc = (Math.random() * size) | 0;
+    if (G.blockers[br][bc]) continue;
+    if (isCenter(br, bc)) continue;
+    G.blockers[br][bc] = true;
+    placed++;
+  }
+
+  tileLayerEl.innerHTML = '';
+  buildGridBg();
+  resize();
+
+  addRandomTile(true);
+  addRandomTile(true);
+
+  updateScore();
+  setModeButtons(G.mode);
+  updateUndoBtn();
+
+  if (G.timeLimit > 0){
+    startTimer(G.timeLimit);
+  } else {
+    timerRowEl.classList.remove('on');
+  }
+
+  closeOverlay();
+  checkGameState();
+}
+
+/* ==================== Mode buttons ==================== */
+function setModeButtons(mode){
+  var btns = modeBarEl.querySelectorAll('.mode-btn');
+  for (var i = 0; i < btns.length; i++){
+    btns[i].classList.toggle('active', btns[i].getAttribute('data-mode') === mode);
+  }
+}
+
+/* ==================== Theme ==================== */
+function applyTheme(name){
+  if (!THEMES[name]) name = 'classic';
+  currentTheme = name;
+  try { localStorage.setItem('g2048_theme', name); } catch(e){}
+  var vars = THEMES[name].vars;
+  for (var k in vars) document.documentElement.style.setProperty(k, vars[k]);
+  for (var r = 0; r < G.size; r++){
+    for (var c = 0; c < G.size; c++){
+      var tl = G.grid[r][c];
+      if (tl) updateTileFace(tl);
+    }
+  }
+}
+
+function buildThemeOptions(){
+  themeSelEl.innerHTML = '';
+  for (var i = 0; i < THEME_KEYS.length; i++){
+    var k = THEME_KEYS[i];
+    var opt = document.createElement('option');
+    opt.value = k;
+    opt.textContent = t(THEME_LABEL[k]);
+    themeSelEl.appendChild(opt);
+  }
+  themeSelEl.value = currentTheme;
+}
+
+/* ==================== Language ==================== */
+function applyLang(lang){
+  if (LANGS.indexOf(lang) < 0) lang = 'zh-Hant';
+  currentLang = lang;
+  try { localStorage.setItem('g2048_lang', lang); } catch(e){}
+
+  document.documentElement.lang = (lang === 'en') ? 'en' : (lang === 'zh-Hans' ? 'zh-Hans' : 'zh-Hant');
+
+  var els = document.querySelectorAll('[data-i18n]');
+  for (var i = 0; i < els.length; i++){
+    els[i].textContent = t(els[i].getAttribute('data-i18n'));
+  }
+
+  buildThemeOptions();
+
+  langSelEl.innerHTML = '';
+  for (var j = 0; j < LANGS.length; j++){
+    var l = LANGS[j];
+    var opt = document.createElement('option');
+    opt.value = l;
+    opt.textContent = I18N[l].langName;
+    langSelEl.appendChild(opt);
+  }
+  langSelEl.value = currentLang;
+}
+
+/* ==================== Overlay ==================== */
+function closeOverlay(){
+  overlayEl.classList.remove('show');
+  overlayEl.removeAttribute('data-dismissible');
+  setTimeout(function(){
+    if (!overlayEl.classList.contains('show')) overlayEl.innerHTML = '';
+  }, 300);
+  setTimeout(updateUndoBtn, 50);
+}
+
+function showWin(){
+  var dlg = document.createElement('div');
+  dlg.className = 'dialog';
+  dlg.innerHTML =
+    '<h2>' + t('win') + '</h2>' +
+    '<div class="ov-score"><small>' + t('finalScore') + '</small>' + G.score + '</div>' +
+    '<p>' + t('winDesc', { n: G.target }) + '</p>' +
+    '<div class="dialog-btns">' +
+      '<button class="btn primary" data-act="continue">' + t('keepGoing') + '</button>' +
+      '<button class="btn" data-act="restart">' + t('restart') + '</button>' +
+    '</div>';
+  overlayEl.innerHTML = '';
+  overlayEl.appendChild(dlg);
+  overlayEl.setAttribute('data-dismissible', '0');
+  overlayEl.classList.add('show');
+  updateUndoBtn();
+
+  dlg.addEventListener('click', function(e){
+    var btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    var act = btn.getAttribute('data-act');
+    if (act === 'continue'){
+      closeOverlay();
+      setTimeout(function(){
+        if (!canMove()) showGameOver('over');
+      }, 320);
+    } else if (act === 'restart'){
+      closeOverlay();
+      newGame(G.lastConfig);
+    }
+  });
+}
+
+function showGameOver(reason){
+  G.over = true;
+  G.running = false;
+  stopTimer();
+  updateUndoBtn();
+
+  var title = t('gameOver');
+  var desc = t('overDesc');
+  if (reason === 'timeup'){ title = t('timeUp'); desc = ''; }
+
+  if (G.score > G.best){
+    G.best = G.score;
+    try { localStorage.setItem('g2048_best', String(G.best)); } catch(e){}
+    bestValEl.textContent = G.best;
+  }
+
+  var dlg = document.createElement('div');
+  dlg.className = 'dialog';
+  dlg.innerHTML =
+    '<h2>' + title + '</h2>' +
+    '<div class="ov-score"><small>' + t('finalScore') + '</small>' + G.score + '</div>' +
+    (desc ? '<p>' + desc + '</p>' : '') +
+    '<div class="dialog-btns">' +
+      '<button class="btn" data-act="undo">' + t('undo') + '</button>' +
+      '<button class="btn primary" data-act="restart">' + t('restart') + '</button>' +
+    '</div>';
+  overlayEl.innerHTML = '';
+  overlayEl.appendChild(dlg);
+  overlayEl.setAttribute('data-dismissible', '0');
+  overlayEl.classList.add('show');
+
+  dlg.addEventListener('click', function(e){
+    var btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    var act = btn.getAttribute('data-act');
+    if (act === 'restart'){
+      closeOverlay();
+      newGame(G.lastConfig);
+    } else if (act === 'undo'){
+      if (!history.length) return;
+      closeOverlay();
+      setTimeout(function(){
+        var snap = history.pop();
+        restoreState(snap);
+      }, 280);
+    }
+  });
+}
+
+/* ==================== 存档 ==================== */
+function utf8ToB64(str){
+  return btoa(unescape(encodeURIComponent(str)));
+}
+function b64ToUtf8(str){
+  return decodeURIComponent(escape(atob(str)));
+}
+
+function serialize(){
+  var data = {
+    v: 1,
+    s: G.size,
+    m: G.mode,
+    t: G.target,
+    tl: G.timeLimit,
+    tr: Math.max(0, Math.round(G.timeLeft * 10) / 10),
+    sc: G.score,
+    wo: G.won ? 1 : 0,
+    b: [],
+    g: []
+  };
+  for (var r = 0; r < G.size; r++){
+    var brow = [], grow = [];
+    for (var c = 0; c < G.size; c++){
+      brow.push(G.blockers[r][c] ? 1 : 0);
+      grow.push(G.grid[r][c] ? G.grid[r][c].value : 0);
+    }
+    data.b.push(brow);
+    data.g.push(grow);
+  }
+  var json = JSON.stringify(data);
+  return utf8ToB64(json).replace(/=+$/, '');
+}
+
+function deserialize(str){
+  str = (str || '').replace(/\s+/g, '');
+  if (!str) throw new Error('empty');
+  while (str.length % 4) str += '=';
+  var json = b64ToUtf8(str);
+  var data = JSON.parse(json);
+  if (!data || !data.g || !data.g.length) throw new Error('invalid');
+  return data;
+}
+
+function loadSnapshot(data){
+  stopTimer();
+  G.locked = false;
+  moveQueue.length = 0;
+  history = [];
+  actionId++;
+
+  G.size = Math.max(3, Math.min(8, parseInt(data.s, 10) || 4));
+  G.mode = (typeof data.m === 'string') ? data.m : 'classic';
+  G.target = parseInt(data.t, 10) || 2048;
+  G.timeLimit = parseInt(data.tl, 10) || 0;
+  G.timeLeft = Math.max(0, parseFloat(data.tr) || 0);
+  G.score = parseInt(data.sc, 10) || 0;
+  G.won = !!data.wo;
+  G.over = false;
+  G.running = true;
+  G.nextId = 1;
+
+  G.blockers = [];
+  for (var r = 0; r < G.size; r++){
+    var brow = [];
+    for (var c = 0; c < G.size; c++){
+      brow.push(!!(data.b && data.b[r] ? data.b[r][c] : 0));
+    }
+    G.blockers.push(brow);
+  }
+
+  var bCount = 0;
+  for (var r2 = 0; r2 < G.size; r2++){
+    for (var c2 = 0; c2 < G.size; c2++){
+      if (G.blockers[r2][c2]) bCount++;
+    }
+  }
+  G.lastConfig = { size: G.size, target: G.target, timeLimit: G.timeLimit, blockers: bCount, mode: G.mode };
+
+  G.grid = [];
+  for (var r3 = 0; r3 < G.size; r3++){
+    var row = [];
+    for (var c3 = 0; c3 < G.size; c3++){
+      var v = data.g && data.g[r3] ? parseInt(data.g[r3][c3], 10) || 0 : 0;
+      if (v > 0){
+        row.push(newTile(v, r3, c3));
+      } else {
+        row.push(null);
+      }
+    }
+    G.grid.push(row);
+  }
+
+  tileLayerEl.innerHTML = '';
+  buildGridBg();
+
+  var side = lastSide || boardEl.getBoundingClientRect().width || 300;
+  boardEl.style.width  = side + 'px';
+  boardEl.style.height = side + 'px';
+  layout(side);
+
+  for (var r4 = 0; r4 < G.size; r4++){
+    for (var c4 = 0; c4 < G.size; c4++){
+      if (G.grid[r4][c4]) ensureTileEl(G.grid[r4][c4], 'anim-appear');
+    }
+  }
+
+  updateScore();
+  setModeButtons(G.mode);
+  updateUndoBtn();
+  closeOverlay();
+
+  if (G.timeLimit > 0){
+    if (G.timeLeft > 0){
+      timerEndAt = Date.now() + G.timeLeft * 1000;
+      timerRowEl.classList.add('on');
+      updateTimerUI();
+      timerInterval = setInterval(timerTick, 100);
+    } else {
+      timerRowEl.classList.add('on');
+      updateTimerUI();
+      setTimeout(function(){ showGameOver('timeup'); }, 350);
+      return;
+    }
+  } else {
+    timerRowEl.classList.remove('on');
+  }
+
+  setTimeout(checkGameState, 250);
+}
+
+/* ==================== 存档对话框 ==================== */
+function openSaveDialog(){
+  var code = serialize();
+  var safeCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  var dlg = document.createElement('div');
+  dlg.className = 'dialog';
+  dlg.innerHTML =
+    '<h2>' + t('saveTitle') + '</h2>' +
+    '<p>' + t('saveDesc') + '</p>' +
+    '<textarea class="save-code" readonly rows="4" id="saveCodeOut">' + safeCode + '</textarea>' +
+    '<div class="dialog-btns">' +
+      '<button class="btn" data-act="copy">' + t('copy') + '</button>' +
+      '<button class="btn primary" data-act="close">' + t('close') + '</button>' +
+    '</div>' +
+    '<div class="divider"></div>' +
+    '<p>' + t('loadDesc') + '</p>' +
+    '<textarea class="save-code" rows="4" id="saveCodeIn" placeholder="..."></textarea>' +
+    '<div class="dialog-btns">' +
+      '<button class="btn primary" data-act="load">' + t('loadBtn') + '</button>' +
+    '</div>';
+
+  overlayEl.innerHTML = '';
+  overlayEl.appendChild(dlg);
+  overlayEl.setAttribute('data-dismissible', '1');
+  overlayEl.classList.add('show');
+  updateUndoBtn();
+
+  var outTa = dlg.querySelector('#saveCodeOut');
+  var inTa  = dlg.querySelector('#saveCodeIn');
+  var copyBtn = dlg.querySelector('[data-act="copy"]');
+  var loadBtn = dlg.querySelector('[data-act="load"]');
+
+  dlg.addEventListener('click', function(e){
+    var btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    var act = btn.getAttribute('data-act');
+
+    if (act === 'copy'){
+      outTa.select();
+      outTa.setSelectionRange(0, 999999);
+      var done = function(){
+        copyBtn.textContent = t('copied');
+        setTimeout(function(){ copyBtn.textContent = t('copy'); }, 1500);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(code).then(done).catch(function(){
+          try { document.execCommand('copy'); done(); } catch(err){}
+        });
+      } else {
+        try { document.execCommand('copy'); done(); } catch(err){}
+      }
+      return;
+    }
+
+    if (act === 'close'){
+      closeOverlay();
+      if (G.running) setModeButtons(G.mode);
+      return;
+    }
+
+    if (act === 'load'){
+      var str = (inTa.value || '').trim();
+      if (!str) return;
+      var data;
+      try {
+        data = deserialize(str);
+      } catch(err){
+        loadBtn.textContent = t('loadError');
+        loadBtn.style.color = '#e8564a';
+        setTimeout(function(){
+          loadBtn.textContent = t('loadBtn');
+          loadBtn.style.color = '';
+        }, 1500);
+        return;
+      }
+      closeOverlay();
+      setTimeout(function(){ loadSnapshot(data); }, 260);
+      return;
+    }
+  });
+}
+
+/* ==================== Custom dialog ==================== */
+var prevModeForCustom = 'classic';
+
+function openCustomDialog(){
+  prevModeForCustom = G.mode;
+  var dlg = document.createElement('div');
+  dlg.className = 'dialog';
+
+  var sizes = [3, 4, 5, 6];
+  var targets = [512, 1024, 2048, 4096];
+  var blockerOpts = [0, 2, 4, 6];
+  var timeOpts = [0, 60, 90, 120];
+
+  function chipsHtml(field, values, activeVal, labelFn){
+    var html = '<div class="chips" data-field="' + field + '">';
+    for (var i = 0; i < values.length; i++){
+      var v = values[i];
+      html += '<button class="chip' + (v === activeVal ? ' active' : '') + '" data-val="' + v + '">' + labelFn(v) + '</button>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  var curSize = 4, curTarget = 2048, curBlockers = 0, curTime = 0;
+  if (G.lastConfig.mode === 'custom'){
+    curSize = G.lastConfig.size;
+    curTarget = G.lastConfig.target;
+    curBlockers = G.lastConfig.blockers;
+    curTime = G.lastConfig.timeLimit;
+  }
+
+  dlg.innerHTML =
+    '<h2>' + t('customTitle') + '</h2>' +
+    '<div class="field"><label>' + t('boardSize') + '</label>' +
+      chipsHtml('size', sizes, curSize, function(v){ return v + '×' + v; }) +
+    '</div>' +
+    '<div class="field"><label>' + t('target') + '</label>' +
+      chipsHtml('target', targets, curTarget, function(v){ return String(v); }) +
+    '</div>' +
+    '<div class="field"><label>' + t('blockers') + '</label>' +
+      chipsHtml('blockers', blockerOpts, curBlockers, function(v){ return v === 0 ? t('none') : String(v); }) +
+    '</div>' +
+    '<div class="field"><label>' + t('timeLimit') + '</label>' +
+      chipsHtml('time', timeOpts, curTime, function(v){ return v === 0 ? t('none') : v + 's'; }) +
+    '</div>' +
+    '<div class="dialog-btns">' +
+      '<button class="btn" data-act="cancel">' + t('cancel') + '</button>' +
+      '<button class="btn primary" data-act="start">' + t('start') + '</button>' +
+    '</div>';
+
+  overlayEl.innerHTML = '';
+  overlayEl.appendChild(dlg);
+  overlayEl.setAttribute('data-dismissible', '1');
+  overlayEl.classList.add('show');
+  updateUndoBtn();
+
+  dlg.addEventListener('click', function(e){
+    var chip = e.target.closest('.chip');
+    if (chip){
+      var group = chip.parentElement;
+      var children = group.querySelectorAll('.chip');
+      for (var i = 0; i < children.length; i++) children[i].classList.remove('active');
+      chip.classList.add('active');
+      return;
+    }
+    var btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    var act = btn.getAttribute('data-act');
+
+    if (act === 'cancel'){
+      closeOverlay();
+      setModeButtons(prevModeForCustom);
+      return;
+    }
+    if (act === 'start'){
+      function getVal(field){
+        var g = dlg.querySelector('.chips[data-field="' + field + '"] .chip.active');
+        return g ? parseInt(g.getAttribute('data-val'), 10) : 0;
+      }
+      var size = getVal('size');
+      var target = getVal('target');
+      var blockers = getVal('blockers');
+      var time = getVal('time');
+
+      var maxB = Math.max(0, Math.min(blockers, size * size - 5));
+      if (maxB < blockers) blockers = maxB;
+
+      closeOverlay();
+      newGame({ size: size, target: target, timeLimit: time, blockers: blockers, mode: 'custom' });
+    }
+  });
+}
+
+/* ==================== Input ==================== */
+function onKeyDown(e){
+  // 输入框内不拦截键盘
+  var tgt = e.target;
+  if (tgt && (tgt.tagName === 'TEXTAREA' || tgt.tagName === 'INPUT' || tgt.isContentEditable)) return;
+
+  var k = e.key;
+  var dir = null;
+  if (k === 'ArrowLeft' || k === 'a' || k === 'A') dir = 'left';
+  else if (k === 'ArrowRight' || k === 'd' || k === 'D') dir = 'right';
+  else if (k === 'ArrowUp' || k === 'w' || k === 'W') dir = 'up';
+  else if (k === 'ArrowDown' || k === 's' || k === 'S') dir = 'down';
+  if (dir){
+    e.preventDefault();
+    doMove(dir);
+  }
+}
+
+/* ---------- 全屏滑动控制 ---------- */
+var touchStartX = 0, touchStartY = 0, touchStartTime = 0, touchActive = false;
+
+// 判断目标是否属于「交互控件」——这些位置不触发滑动
+function isInteractiveTarget(el){
+  if (!el || !el.closest) return false;
+  // 对话框内（包含按钮/输入框/滚动条等）不触发
+  if (el.closest('.dialog')) return true;
+  // 各类按钮与下拉/输入
+  if (el.closest('button, select, input, textarea, a, .btn, .mode-btn, .chip, .sel')) return true;
+  return false;
+}
+
+function onTouchStart(e){
+  if (e.touches.length > 1){ touchActive = false; return; }
+  // 对话框打开时禁止滑动游戏
+  if (overlayEl.classList.contains('show')){ touchActive = false; return; }
+  // 点在交互控件上时不激活滑动
+  if (isInteractiveTarget(e.target)){ touchActive = false; return; }
+
+  touchActive = true;
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+  touchStartTime = Date.now();
+}
+
+function onTouchMove(e){
+  if (touchActive && e.cancelable) e.preventDefault();
+}
+
+function onTouchEnd(e){
+  if (!touchActive) return;
+  touchActive = false;
+  var dx = e.changedTouches[0].clientX - touchStartX;
+  var dy = e.changedTouches[0].clientY - touchStartY;
+  var dt = Date.now() - touchStartTime;
+  if (dt > 800) return;
+  var adx = Math.abs(dx), ady = Math.abs(dy);
+  if (Math.max(adx, ady) < 20) return;
+  if (adx > ady){
+    doMove(dx > 0 ? 'right' : 'left');
+  } else {
+    doMove(dy > 0 ? 'down' : 'up');
+  }
+}
+
+/* ==================== Event wiring ==================== */
+modeBarEl.addEventListener('click', function(e){
+  var btn = e.target.closest('.mode-btn');
+  if (!btn) return;
+  var mode = btn.getAttribute('data-mode');
+  if (mode === 'custom'){ openCustomDialog(); return; }
+  var cfg;
+  if (mode === 'classic') cfg = { size:4, target:2048, timeLimit:0, blockers:0, mode:'classic' };
+  else if (mode === 'timed') cfg = { size:4, target:2048, timeLimit:90, blockers:0, mode:'timed' };
+  else cfg = { size:4, target:2048, timeLimit:0, blockers:4, mode:'blocker' };
+  newGame(cfg);
+});
+
+newBtnEl.addEventListener('click', function(){
+  if (G.mode === 'custom'){ openCustomDialog(); return; }
+  var cfg;
+  if (G.mode === 'timed') cfg = { size:4, target:2048, timeLimit:90, blockers:0, mode:'timed' };
+  else if (G.mode === 'blocker') cfg = { size:4, target:2048, timeLimit:0, blockers:4, mode:'blocker' };
+  else cfg = { size:4, target:2048, timeLimit:0, blockers:0, mode:'classic' };
+  newGame(cfg);
+});
+
+restartBtnEl.addEventListener('click', function(){
+  newGame(G.lastConfig);
+});
+
+undoBtnEl.addEventListener('click', function(){
+  undo();
+});
+
+saveBtnEl.addEventListener('click', function(){
+  openSaveDialog();
+});
+
+themeSelEl.addEventListener('change', function(){
+  applyTheme(themeSelEl.value);
+});
+
+langSelEl.addEventListener('change', function(){
+  applyLang(langSelEl.value);
+});
+
+overlayEl.addEventListener('click', function(e){
+  if (e.target === overlayEl && overlayEl.getAttribute('data-dismissible') === '1'){
+    closeOverlay();
+    if (G.running) setModeButtons(G.mode);
+  }
+});
+
+/* 关键：全局监听触摸事件，实现整屏控制 */
+document.addEventListener('touchstart', onTouchStart, { passive: true });
+document.addEventListener('touchmove', onTouchMove, { passive: false });
+document.addEventListener('touchend', onTouchEnd, { passive: true });
+document.addEventListener('touchcancel', function(){ touchActive = false; }, { passive: true });
+
+/* 全局阻止页面滚动（对话框内允许滚动） */
+document.addEventListener('touchmove', function(e){
+  if (e.target.closest && e.target.closest('.dialog')) return;
+  if (e.cancelable) e.preventDefault();
+}, { passive: false });
+
+/* 阻止双击缩放 */
+var lastTouchEnd = 0;
+document.addEventListener('touchend', function(e){
+  var now = Date.now();
+  if (now - lastTouchEnd <= 300) e.preventDefault();
+  lastTouchEnd = now;
+}, { passive: false });
+
+/* 键盘全局监听 */
+window.addEventListener('keydown', onKeyDown, { passive: false });
+
+window.addEventListener('resize', scheduleResize);
+window.addEventListener('orientationchange', function(){ setTimeout(scheduleResize, 200); });
+
+if (typeof ResizeObserver !== 'undefined'){
+  var ro = new ResizeObserver(function(){ scheduleResize(); });
+  ro.observe(boardWrap);
+}
+
+/* ==================== Init ==================== */
+function init(){
+  applyLang(currentLang);
+  applyTheme(currentTheme);
+  requestAnimationFrame(function(){
+    resize();
+    newGame({ size:4, target:2048, timeLimit:0, blockers:0, mode:'classic' });
+  });
+}
+
+init();
+
+})();
+</script>
+</body>
+</html>
